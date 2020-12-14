@@ -1,0 +1,86 @@
+#!/bin/bash
+
+#stty intr
+#shopt -qs nocasematch
+
+[ -z "$LOGDIR" ] && LOGDIR="${HOME}/Logs"
+
+ARGS=( "${@}" )
+SSHCMD="/usr/bin/ssh "
+HOSTFOUND=""
+
+for (( A=0; ${#ARGS[*]}-$A ; ((A++)) )) ; do
+  case ${ARGS[$A]} in
+    -*)    # an option
+        if [[ ${ARGS[$A]} =~ -[46AaCfGgKkMNnqsTtVvXxYy] ]] ; then
+          SSHCMD+=" ${ARGS[$A]}"
+        else
+          SSHCMD+=" ${ARGS[$A]} ${ARGS[$((A+1))]}"
+          ((A++))
+        fi
+        ;;
+    *)     # found host to connect - test for [user@]host[:port].
+        if [ -z "$HOSTFOUND" ] ; then
+          B=`echo ${ARGS[$A]} | sed -r 's%^(ssh://)?([^/]+)/?%\2%g'`
+          S1=(${B/@/ })
+          if [[ ! -z ${S1[1]} ]] ; then # found username
+            SSHCMD+=" -l ${S1[0]}"
+	    S2=${S1[1]}
+          else
+            S2=${S1[0]}
+          fi
+
+          if [[ ${S2} =~ :[0-9-]+$ ]] ; then # has port at the end
+            SSHPORT=`echo $S2 | sed -r "s%.*:([0-9-]+)%\1%g"`
+            [ ${SSHPORT} != -1 ] && SSHCMD+=" -p $SSHPORT"
+            S3=`echo $S2 | sed -r "s%(.*):[0-9-]+%\1%g"`
+          else
+            S3=$S2
+          fi
+
+          SSHHOST=`echo $S3 | tr -d '[]'`
+          SSHCMD+=" $SSHHOST"
+          HOSTFOUND="Y"
+
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          LOGFILE="$LOGDIR/$TIMESTAMP-$SSHHOST"
+          DNSTAG="DNStag init"
+
+          if [[ $SSHHOST != "localhost" ]] ; then
+            TERM=xterm
+            if { TEST=`grep -iEe "^[^ ]+ ([^ ]+ )?$SSHHOST( |$)" ~/.ssh/config | grep -v "^#"`; [[ "$TEST" ]]; } ; then  # matched entry on ~/.ssh/config
+              DNSTAG="Matched ssh_config entry \"$TEST\""
+            elif [[ $SSHHOST =~ ^[0-9a-fA-F:\.]+$ ]]; then  # is IP address
+              DNSTAG=""                                                       # IP address
+            elif { TEST=`host -t ANY -W 1 $SSHHOST | grep "has address"` ; [[ $? == 0 ]] ; } ; then            # try DNS
+              DNSTAG="$SSHHOST has address ${TEST##* }"
+            elif { TEST=`getent ahosts $SSHHOST` ; [[ "$TEST" ]] ; } ; then                # is resolvable by local means
+              DNSTAG="$SSHHOST has address ${TEST%% *}"
+            else
+              echo "Unable to resolve $SSHHOST"
+              exit 1
+            fi
+          fi
+        else
+           # if host was previously found, just add to SSHCMD as command to pass to SSH target
+          SSHCMD+=" ${ARGS[$A]}"
+        fi
+  esac
+done
+
+[ ! -z "$DNSTAG" ] && echo $DNSTAG
+echo -e "\n:: Logging to $LOGFILE.log started at $TIMESTAMP\n" | tee -a "$LOGFILE".log  # LOG file start
+echo -ne "\e]0;`basename $0` $* | `basename $LOGFILE.log`\a"                            # set window title
+#echo "%%DEBUG: { $SSHCMD }"
+eval "$SSHCMD" | tee -a "$LOGFILE".log
+DATEEND=`date +%Y%m%d-%H%M%S`
+if [[ -e "$LOGFILE".log ]] ; then
+  if (( `cat "$LOGFILE".log | wc -l` < 4 )) ; then
+    rm "$LOGFILE".log
+  else
+    echo -e "\n:: Logging to $LOGFILE.log ended at $DATEEND" | tee -a "$LOGFILE".log        # LOG file stop
+    mv $LOGFILE.log $LOGFILE-$DATEEND.log
+    echo ".... Moved to $LOGFILE-$DATEEND.log" | tee -a "$LOGFILE-$DATEEND".log
+  fi
+fi
+
