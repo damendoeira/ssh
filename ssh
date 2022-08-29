@@ -19,7 +19,7 @@ for (( A=0; ${#ARGS[*]}-$A ; ((A++)) )) ; do
           ((A++))
         fi
         ;;
-    *)     # found host to connect - test for [user@]host[:port].
+    *)     # found host to connect - parse for [user@]host[:port].
         if [ -z "$HOSTFOUND" ] ; then
           B=`echo ${ARGS[$A]} | sed -r 's%^(ssh://)?([^/]+)/?%\2%g'`
           S1=(${B/@/ })
