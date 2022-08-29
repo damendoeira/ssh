@@ -12,7 +12,7 @@ HOSTFOUND=""
 for (( A=0; ${#ARGS[*]}-$A ; ((A++)) )) ; do
   case ${ARGS[$A]} in
     -*)    # an option
-        if [[ ${ARGS[$A]} =~ -[46AaCfGgKkMNnqsTtVvXxYy] ]] ; then
+        if [[ ${ARGS[$A]} =~ -[146AaCfGgKkMNnqsTtVvXxYy] ]] ; then
           SSHCMD+=" ${ARGS[$A]}"
         else
           SSHCMD+=" ${ARGS[$A]} ${ARGS[$((A+1))]}"
